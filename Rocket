@@ -1,0 +1,194 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+-- Create Toggle GUI Button (Opens/Closes the Main Frame)
+local toggleGuiButton = Instance.new("TextButton")
+toggleGuiButton.Size = UDim2.new(0, 50, 0, 25)
+toggleGuiButton.Position = UDim2.new(0, 10, 0, 10) -- Top-left corner
+toggleGuiButton.Text = "Open"
+toggleGuiButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleGuiButton.Parent = screenGui
+
+-- Create the main frame (Initially Hidden)
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 300, 0, 250)
+frame.Position = UDim2.new(0.5, -150, 0.5, -125)
+frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+frame.BackgroundTransparency = 0.5
+frame.Visible = false -- Initially Hidden
+frame.Parent = screenGui
+
+-- Create Toggle Script Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 100, 0, 50)
+toggleButton.Position = UDim2.new(0, 50, 0, 30)
+toggleButton.Text = "Enable Script"
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+toggleButton.Parent = frame
+
+-- Create Kill All Button
+local killAllButton = Instance.new("TextButton")
+killAllButton.Size = UDim2.new(0, 100, 0, 50)
+killAllButton.Position = UDim2.new(0, 150, 0, 30)
+killAllButton.Text = "Kill All"
+killAllButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+killAllButton.Parent = frame
+
+-- Create Player Name Input Field
+local playerNameInput = Instance.new("TextBox")
+playerNameInput.Size = UDim2.new(0, 200, 0, 30)
+playerNameInput.Position = UDim2.new(0, 50, 0, 100)
+playerNameInput.PlaceholderText = "Enter Player Name"
+playerNameInput.Text = ""
+playerNameInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+playerNameInput.Parent = frame
+
+-- Create Bullet Count Input Field
+local bulletCountInput = Instance.new("TextBox")
+bulletCountInput.Size = UDim2.new(0, 200, 0, 30)
+bulletCountInput.Position = UDim2.new(0, 50, 0, 140)
+bulletCountInput.PlaceholderText = "Enter Bullet Count"
+bulletCountInput.Text = "25"
+bulletCountInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+bulletCountInput.Parent = frame
+
+-- Variables
+local isScriptRunning = false
+local targetPlayer = nil
+local numBullets = 25
+
+-- Toggle GUI Function
+local function toggleGUI()
+    frame.Visible = not frame.Visible
+    toggleGuiButton.Text = frame.Visible and "Close" or "Open"
+end
+
+-- Attach Toggle GUI Button Click Event
+toggleGuiButton.MouseButton1Click:Connect(toggleGUI)
+
+-- Function to spawn bullets around the target player
+local function spawnBulletsAroundPlayer(targetPlayer, rocketJumper, numBullets, maxDistance)
+    local character = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local delayBetweenBullets = 0.1
+
+    for i = 1, numBullets do
+        local randomOffset = Vector3.new(
+            math.random(-maxDistance, maxDistance),
+            math.random(5, 10), -- Random height
+            math.random(-maxDistance, maxDistance)
+        )
+        local spawnPosition = rootPart.Position + randomOffset
+        local destination = rootPart.Position
+
+        local args = {spawnPosition, destination}
+        rocketJumper.FireRocket:FireServer(unpack(args))
+        wait(delayBetweenBullets)
+    end
+end
+
+-- Function to fire bullets at a selected player
+local function rain(targetPlayer)
+    local rocketJumper = player.Backpack:FindFirstChild("RocketJumper")
+    if not rocketJumper then
+        print("RocketJumper not found in Backpack.")
+        return
+    end
+
+    local maxDistance = 25
+    spawnBulletsAroundPlayer(targetPlayer, rocketJumper, numBullets, maxDistance)
+end
+
+-- Function to kill all players except the local player
+local function killAll()
+    local rocketJumper = player.Backpack:FindFirstChild("RocketJumper")
+    if not rocketJumper then
+        print("RocketJumper not found in Backpack.")
+        return
+    end
+
+    for _, targetPlayer in pairs(Players:GetPlayers()) do
+        if targetPlayer ~= player then -- Exclude the local player
+            spawnBulletsAroundPlayer(targetPlayer, rocketJumper, numBullets, 25)
+        end
+    end
+end
+
+-- Toggle script button event
+toggleButton.MouseButton1Click:Connect(function()
+    if isScriptRunning then
+        isScriptRunning = false
+        toggleButton.Text = "Enable Script"
+        print("Script Disabled.")
+    else
+        isScriptRunning = true
+        toggleButton.Text = "Disable Script"
+        print("Script Enabled.")
+        
+        if targetPlayer then
+            RunService.Heartbeat:Connect(function()
+                if isScriptRunning then
+                    rain(targetPlayer)
+                    wait(0.5)
+                end
+            end)
+        end
+    end
+end)
+
+-- Kill All button event
+killAllButton.MouseButton1Click:Connect(function()
+    killAll()
+end)
+
+-- Player Name input field event
+playerNameInput.FocusLost:Connect(function()
+    local playerName = playerNameInput.Text
+    targetPlayer = Players:FindFirstChild(playerName)
+    if targetPlayer then
+        print("Selected Player: " .. playerName)
+    else
+        print("Player not found: " .. playerName)
+    end
+end)
+
+-- Bullet Count input field event
+bulletCountInput.FocusLost:Connect(function()
+    local bulletCount = tonumber(bulletCountInput.Text)
+    if bulletCount and bulletCount > 0 then
+        numBullets = bulletCount
+        print("Bullet count set to: " .. numBullets)
+    else
+        print("Invalid bullet count. Defaulting to 25.")
+    end
+end)
+
+-- Function to make the GUI draggable
+local dragging = false
+local dragStart, startPos
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+frame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
