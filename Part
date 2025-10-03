@@ -1,0 +1,91 @@
+local Plugin = {
+    ["PluginName"] = "ClonePlace",
+    ["PluginDescription"] = "Select part (green), preview ghost (red), double-click to move ghost, place it with ;placeclone",
+    ["Commands"] = {}
+}
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+local selectedPart
+local previewClone
+local lastClickTime = 0
+local doubleClickThreshold = 0.35
+
+Plugin.Commands["clonepart"] = {
+    ["ListName"] = "clonepart",
+    ["Description"] = "Click a part to select & preview clone. Double-click elsewhere to move preview.",
+    ["Aliases"] = {"cpart","clonep"},
+    ["Function"] = function(args, speaker)
+        notify("ClonePlace", "Tap a part to select...")
+
+        local conn
+        conn = mouse.Button1Down:Connect(function()
+            local target = mouse.Target
+            if target and target:IsA("BasePart") then
+                if selectedPart and selectedPart:FindFirstChild("Highlight") then
+                    selectedPart.Highlight:Destroy()
+                end
+                if previewClone then
+                    previewClone:Destroy()
+                end
+
+                local hl = Instance.new("Highlight")
+                hl.Adornee = target
+                hl.FillTransparency = 1
+                hl.OutlineColor = Color3.fromRGB(0,255,0)
+                hl.OutlineTransparency = 0
+                hl.Parent = target
+
+                selectedPart = target
+
+                previewClone = target:Clone()
+                previewClone.Color = Color3.fromRGB(255,0,0)
+                previewClone.Transparency = 0.5
+                previewClone.Anchored = true
+                previewClone.CanCollide = false
+                previewClone.Parent = workspace
+                previewClone.CFrame = target.CFrame
+
+                notify("ClonePlace", "Selected "..target.Name..". Preview ready (red).")
+
+                mouse.Button1Down:Connect(function()
+                    local now = tick()
+                    if now - lastClickTime <= doubleClickThreshold then
+                        local hitPos = mouse.Hit
+                        if previewClone then
+                            previewClone.CFrame = CFrame.new(hitPos.p)
+                            notify("ClonePlace", "Preview moved!")
+                        end
+                    end
+                    lastClickTime = now
+                end)
+            else
+                notify("ClonePlace", "Invalid target (must be BasePart).")
+            end
+            conn:Disconnect()
+        end)
+    end
+}
+
+Plugin.Commands["placeclone"] = {
+    ["ListName"] = "placeclone",
+    ["Description"] = "Places preview clone where you positioned it",
+    ["Aliases"] = {"pclone","placec"},
+    ["Function"] = function(args, speaker)
+        if not previewClone or not selectedPart then
+            notify("ClonePlace", "No preview clone. Use ;clonepart first.")
+            return
+        end
+
+        local final = selectedPart:Clone()
+        final.Anchored = true
+        final.Parent = workspace
+        final.CFrame = previewClone.CFrame
+
+        notify("ClonePlace", "Placed "..final.Name.." at preview position!")
+    end
+}
+
+return Plugin
